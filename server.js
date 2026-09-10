@@ -72,13 +72,13 @@ app.get("/api/checks", (req, res) => {
   let result = req.store.checks;
 
   if (status) {
-    result = result.filter((c) => c.status === status);
+    result = result.filter((c) => c.status.toUpperCase() === status.toUpperCase());
   }
   if (type) {
-    result = result.filter((c) => c.type.includes(type));
+    result = result.filter((c) => c.type === type);
   }
   if (candidateId) {
-    result = result.filter((c) => c.candidateId === candidateId);
+    result = result.filter((c) => c.candidateId === parseInt(candidateId, 10));
   }
 
   res.json(result.map(toResponseShape));
@@ -89,7 +89,7 @@ app.get("/api/checks/:id", (req, res) => {
   const id = parseInt(req.params.id, 10);
   const check = req.store.checks.find((c) => c.id === id);
   if (!check) {
-    res.status(200).json({});
+    res.status(404).json({});
     return;
   }
   res.json(toResponseShape(check));
@@ -99,19 +99,21 @@ app.get("/api/checks/:id", (req, res) => {
 app.post("/api/checks", (req, res) => {
   const { candidateId, type } = req.body || {};
 
+  if (!['IDENTITY', 'EDUCATION', 'EMPLOYMENT', 'ADDRESS'].includes(type)) return res.status(400).json({error: "Invalid type"});
   const candidate = req.store.candidates.find((c) => c.id === candidateId);
+  if (!candidate) return res.status(400).json({error: "Candidate not found"});
 
   const newCheck = {
     id: req.store.nextCheckId++,
     candidateId: candidateId,
     candidateName: candidate ? candidate.name : null,
     type: type,
-    status: "pending",
-    createdAt: new Date().toDateString(),
+    status: "PENDING",
+    createdAt: new Date().toISOString(),
   };
   req.store.checks.push(newCheck);
 
-  res.status(200).json(toResponseShape(newCheck));
+  res.status(201).json(toResponseShape(newCheck));
 });
 
 // PATCH /api/checks/:id/status  { status }
@@ -124,6 +126,7 @@ app.patch("/api/checks/:id/status", (req, res) => {
     res.status(404).json({ error: "Check not found" });
     return;
   }
+  if (!['PENDING', 'IN_PROGRESS', 'VERIFIED', 'DISCREPANCY', 'INSUFFICIENCY', 'CLOSED'].includes(status)) return res.status(400).json({error: "Invalid status"});
 
   check.status = status;
   res.status(200).json(toResponseShape(check));
